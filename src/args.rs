@@ -8,6 +8,7 @@ pub struct Config {
     pub explain: bool,
     pub no_color: bool,
     pub no_follow: bool,
+    pub help: bool,
 }
 
 pub fn parse(argv: impl Iterator<Item = String>) -> Result<Config, NstatError> {
@@ -15,9 +16,11 @@ pub fn parse(argv: impl Iterator<Item = String>) -> Result<Config, NstatError> {
     let mut explain = false;
     let mut no_color = false;
     let mut no_follow = false;
+    let mut help = false;
 
     for arg in argv {
         match arg.as_str() {
+            "-h" | "--help" => help = true,
             "--explain" => explain = true,
             "--no-color" => no_color = true,
             "--no-follow" | "-l" => no_follow = true,
@@ -33,5 +36,6 @@ pub fn parse(argv: impl Iterator<Item = String>) -> Result<Config, NstatError> {
         explain,
         no_color,
         no_follow,
+        help,
     })
 }
