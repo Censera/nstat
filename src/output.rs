@@ -301,13 +301,41 @@ fn plural(n: i64, unit: &str) -> String {
     }
 }
 
-/// Formats a SystemTime as an ISO-ish local independnt timestamp
+fn get_local_offset(unix_secs: i64) -> i64 {
+    unsafe {
+        let time_val = unix_secs as libc::time_t;
+        let mut tm_struct = std::mem::zeroed::<libc::tm>();
+        
+        if libc::localtime_r(&time_val, &mut tm_struct).is_null() {
+            return 0; // Fallback to 0 if the system call fails
+        }
+        
+        tm_struct.tm_gmtoff as i64
+    }
+}
+
+
 fn absolute_time(t: SystemTime) -> String {
     let secs = t
         .duration_since(SystemTime::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0);
-    civil_from_unix(secs)
+    
+    let now_secs = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(secs);
+
+    let offset = get_local_offset(now_secs);
+    let local_secs = secs + offset;
+
+    let tz_label = match offset {
+        0 => "UTC",
+        3600 => "BST",
+        _ => "local",
+    };
+
+    format!("{} {tz_label}", civil_from_unix(local_secs).replace(" UTC", ""))
 }
 
 fn civil_from_unix(unix_secs: i64) -> String {
@@ -326,7 +354,7 @@ fn civil_from_unix(unix_secs: i64) -> String {
     let mo = if mp < 10 { mp + 3 } else { mp - 9 };
     let y = if mo <= 2 { y + 1 } else { y };
 
-    format!("{y:04}-{mo:02}-{d:02} {h:02}:{m:02}:{s:02} UTC")
+    format!("{y:04}-{mo:02}-{d:02} {h:02}:{m:02}:{s:02}")
 }
 
 const EXPLAIN_SIZE: &str = "The number of bytes of actual content in the file.";
