@@ -27,6 +27,8 @@ pub struct Info {
     pub device: u64,
     pub inode: u64,
     pub mode: u32,
+    pub owner: String,
+    pub group: String,
     pub modified: SystemTime,
     pub accessed: SystemTime,
     pub created: Option<SystemTime>,
@@ -52,6 +54,31 @@ pub fn gather(path: &Path, no_follow: bool) -> Result<Info, NstatError> {
         _ => None,
     };
 
+    let uid = meta.uid();
+    let gid = meta.gid();
+
+    let owner = unsafe {
+        let pwd = libc::getpwuid(uid);
+        if !pwd.is_null() {
+            std::ffi::CStr::from_ptr((*pwd).pw_name)
+                .to_string_lossy()
+                .into_owned()
+        } else {
+            uid.to_string()
+        }
+    };
+
+    let group = unsafe {
+        let grp = libc::getgrgid(gid);
+        if !grp.is_null() {
+            std::ffi::CStr::from_ptr((*grp).gr_name)
+                .to_string_lossy()
+                .into_owned()
+        } else {
+            gid.to_string()
+        }
+    };
+
     Ok(Info {
         name,
         kind,
@@ -63,6 +90,8 @@ pub fn gather(path: &Path, no_follow: bool) -> Result<Info, NstatError> {
         device: meta.dev(),
         inode: meta.ino(),
         mode: meta.mode(),
+        owner,
+        group,
         modified: meta.modified().unwrap_or(SystemTime::UNIX_EPOCH),
         accessed: meta.accessed().unwrap_or(SystemTime::UNIX_EPOCH),
         created: meta.created().ok(),

@@ -134,7 +134,20 @@ fn render_permissions(info: &Info, ctx: &mut RenderCtx, pal: &Palette) {
         width,
         Palette::perm,
     );
-    for (label, shift) in [("Owner", 6), ("Group", 3), ("Other", 0)] {
+
+    out.push_str(&format!(
+        "        {}  {}\n",
+        pal.label("Owner"),
+        pal.stat(&info.owner)
+    ));
+
+    out.push_str(&format!(
+        "        {}  {}\n",
+        pal.label("Group"),
+        pal.stat(&info.group),
+    ));
+
+    for (label, shift) in [("Owner Rights", 6), ("Group Rights", 3), ("Other Rights", 0)] {
         let bits = (perm_bits >> shift) & 0o7;
         let _ = writeln!(
             ctx.out,
