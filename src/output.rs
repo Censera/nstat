@@ -25,12 +25,12 @@ pub fn render(info: &Info, explain: bool, pal: &Palette) -> String {
     };
 
     if let Kind::Regular = info.kind {
-        render_regular(info, &mut ctx, pal)
+        render_regular(info, &mut ctx)
     }
 
-    render_permissions(info, &mut ctx, pal);
+    render_permissions(info, &mut ctx);
     ctx.out.push('\n');
-    render_times(info, &mut ctx, pal);
+    render_times(info, &mut ctx);
 
     out
 }
@@ -64,7 +64,7 @@ const REGULAR_LABELS: [&str; 6] = [
     "Inode",
 ];
 
-fn render_regular(info: &Info, ctx: &mut RenderCtx, _pal: &Palette) {
+fn render_regular(info: &Info, ctx: &mut RenderCtx) {
     let width = label_width(&REGULAR_LABELS);
     row(
         ctx,
@@ -123,7 +123,7 @@ fn label_width(labels: &[&str]) -> usize {
     labels.iter().map(|l| l.chars().count()).max().unwrap_or(0)
 }
 
-fn render_permissions(info: &Info, ctx: &mut RenderCtx, pal: &Palette) {
+fn render_permissions(info: &Info, ctx: &mut RenderCtx) {
     let perm_bits = info.mode & 0o777;
     let width = "Permissions".chars().count();
     row(
@@ -152,46 +152,35 @@ fn render_permissions(info: &Info, ctx: &mut RenderCtx, pal: &Palette) {
         let _ = writeln!(
             ctx.out,
             "        {}  {}",
-            pal.label(label),
-            pal.perm(rwx_words(bits)) // Removed the & because rwx_words is now &'static str
+            ctx.pal.label(label),
+            ctx.pal.perm(rwx_words(bits))
         );
     }
 }
 
 const TIME_LABELS: [&str; 3] = ["Modified", "Accessed", "Created"];
 
-fn render_times(info: &Info, ctx: &mut RenderCtx, _pal: &Palette) {
+fn render_times(info: &Info, ctx: &mut RenderCtx) {
     let width = label_width(&TIME_LABELS);
-    row(
-        ctx,
-        "Modified",
-        &natural_time(info.modified),
-        EXPLAIN_MODIFIED,
-        width,
-        Palette::time,
-    );
-    row(
-        ctx,
-        "Accessed",
-        &natural_time(info.accessed),
-        EXPLAIN_ACCESSED,
-        width,
-        Palette::time,
-    );
-    match info.created {
-        Some(t) => row(
-            ctx,
-            " Created",
-            &natural_time(t),
-            EXPLAIN_CREATED,
-            width,
-            Palette::time,
-        ),
+    render_time_row(ctx, "Modified", info.modified, EXPLAIN_MODIFIED, width);
+    render_time_row(ctx, "Accessed", info.accessed, EXPLAIN_ACCESSED, width);
+    render_time_row(ctx, " Created", info.created, EXPLAIN_CREATED, width);
+}
+
+fn render_time_row(
+    ctx: &mut RenderCtx,
+    label: &str,
+    value: Option<SystemTime>,
+    explanation: &str,
+    width: usize,
+) {
+    match value {
+        Some(t) => row(ctx, label, &natural_time(t), explanation, width, Palette::time),
         None => row(
             ctx,
-            "Created",
+            label.trim_start(),
             "Not available on this filesystem",
-            EXPLAIN_CREATED,
+            explanation,
             width,
             Palette::time,
         ),
@@ -249,8 +238,7 @@ fn rwx_string(bits: u32) -> String {
         }
     }
 
-    // Safe because we only ever push valid ASCII chars: r, w, x, -
-    unsafe { String::from_utf8_unchecked(buf.to_vec()) }
+    buf.iter().map(|&b| b as char).collect()
 }
 
 fn rwx_words(bits: u32) -> &'static str {
@@ -333,18 +321,6 @@ fn absolute_time(t: SystemTime) -> String {
 
     let offset = get_local_offset(secs);
     let local_secs = secs + offset;
-
-    // The tz_label assignment in output.rs makes a hardcoded
-    // assumption that any 3600 second offset is British Summer
-    // Time (BST). Since 3600 seconds (UTC+1) is also shared by
-    // Central European Time (CET) and Western European Summer
-    // Time (WEST), this is factually incorrect
-    //
-    // let tz_label = match offset {
-    //     0 => "UTC",
-    //     3600 => "BST",
-    //     _ => "local",
-    // };
 
     let tz_label = if offset == 0 {
         "UTC".to_string()

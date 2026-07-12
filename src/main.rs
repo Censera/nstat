@@ -18,7 +18,7 @@ fn main() -> ExitCode {
 }
 
 /// Returns Ok(true) if all paths were successfully processed,
-/// or Ok(false) if one or more paths failed to sta.
+/// or Ok(false) if one or more paths failed to stat.
 fn run() -> Result<bool, error::NstatError> {
     let config = args::parse(std::env::args().skip(1))?;
     let pal = color::Palette::decide(config.no_color);

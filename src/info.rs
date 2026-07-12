@@ -29,8 +29,8 @@ pub struct Info {
     pub mode: u32,
     pub owner: String,
     pub group: String,
-    pub modified: SystemTime,
-    pub accessed: SystemTime,
+    pub modified: Option<SystemTime>,
+    pub accessed: Option<SystemTime>,
     pub created: Option<SystemTime>,
 }
 
@@ -90,10 +90,10 @@ pub fn gather(path: &Path, no_follow: bool) -> Result<Info, NstatError> {
         device: meta.dev(),
         inode: meta.ino(),
         mode: meta.mode(),
-        owner,
-        group,
-        modified: meta.modified().unwrap_or(SystemTime::UNIX_EPOCH),
-        accessed: meta.accessed().unwrap_or(SystemTime::UNIX_EPOCH),
+       owner,
+       group,
+       modified: meta.modified().ok(),
+       accessed: meta.accessed().ok(),
         created: meta.created().ok(),
     })
 }
@@ -101,8 +101,7 @@ pub fn gather(path: &Path, no_follow: bool) -> Result<Info, NstatError> {
 fn classify(path: &Path, meta: &fs::Metadata) -> Result<Kind, NstatError> {
     let ft = meta.file_type();
     if ft.is_symlink() {
-        let target =
-            fs::read_link(path).map_err(|e| NstatError::ReadLink(path.to_path_buf(), e))?;
+        let target = fs::read_link(path).map_err(|e| to_readlink_error(path, e))?;
         return Ok(Kind::Symlink(target));
     }
     if ft.is_dir() {
@@ -128,6 +127,14 @@ fn to_nstat_error(path: &Path, e: std::io::Error) -> NstatError {
         std::io::ErrorKind::NotFound => NstatError::PathNotFound(path.to_path_buf()),
         std::io::ErrorKind::PermissionDenied => NstatError::PermissionDenied(path.to_path_buf()),
         _ => NstatError::Stat(path.to_path_buf(), e),
+    }
+}
+
+fn to_readlink_error(path: &Path, e: std::io::Error) -> NstatError {
+    match e.kind() {
+        std::io::ErrorKind::NotFound => NstatError::PathNotFound(path.to_path_buf()),
+        std::io::ErrorKind::PermissionDenied => NstatError::PermissionDenied(path.to_path_buf()),
+        _ => NstatError::ReadLink(path.to_path_buf(), e),
     }
 }
 
