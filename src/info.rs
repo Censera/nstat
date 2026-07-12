@@ -1,3 +1,8 @@
+// getpwuid, getgrgid, localtime_r, and libc::tm are all POSIX only.
+// None of this compiles on Windows. If nstat needs to stay cross-platform,
+// this has to go behind a cfg(unix) gate with a fallback,
+// not land as the only implementation.
+
 use std::fs;
 use std::io::Read;
 use std::os::unix::fs::{FileTypeExt, MetadataExt};
@@ -90,10 +95,10 @@ pub fn gather(path: &Path, no_follow: bool) -> Result<Info, NstatError> {
         device: meta.dev(),
         inode: meta.ino(),
         mode: meta.mode(),
-       owner,
-       group,
-       modified: meta.modified().ok(),
-       accessed: meta.accessed().ok(),
+        owner,
+        group,
+        modified: meta.modified().ok(),
+        accessed: meta.accessed().ok(),
         created: meta.created().ok(),
     })
 }

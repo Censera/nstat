@@ -1,3 +1,8 @@
+// A stat replacement. Give it a path, it prints file metadata.
+// Not an indexer or monitoring tool. Keep it a simple, single-purpose CLI.
+// Build and test before pushing to main. Comment unsafe blocks. Don't
+// hide failures behind silent fallbacks.
+
 mod args;
 mod color;
 mod error;

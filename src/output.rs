@@ -135,19 +135,29 @@ fn render_permissions(info: &Info, ctx: &mut RenderCtx) {
         Palette::perm,
     );
 
-    out.push_str(&format!(
-        "        {}  {}\n",
-        pal.label("Owner"),
-        pal.stat(&info.owner)
-    ));
+    row(
+        ctx,
+        "Owner",
+        &info.owner,
+        EXPLAIN_OWNER,
+        width,
+        Palette::stat,
+    );
 
-    out.push_str(&format!(
-        "        {}  {}\n",
-        pal.label("Group"),
-        pal.stat(&info.group),
-    ));
+    row(
+        ctx,
+        "Group",
+        &info.group,
+        EXPLAIN_GROUP,
+        width,
+        Palette::stat,
+    );
 
-    for (label, shift) in [("Owner Rights", 6), ("Group Rights", 3), ("Other Rights", 0)] {
+    for (label, shift) in [
+        ("Owner Rights", 6),
+        ("Group Rights", 3),
+        ("Other Rights", 0),
+    ] {
         let bits = (perm_bits >> shift) & 0o7;
         let _ = writeln!(
             ctx.out,
@@ -175,7 +185,14 @@ fn render_time_row(
     width: usize,
 ) {
     match value {
-        Some(t) => row(ctx, label, &natural_time(t), explanation, width, Palette::time),
+        Some(t) => row(
+            ctx,
+            label,
+            &natural_time(t),
+            explanation,
+            width,
+            Palette::time,
+        ),
         None => row(
             ctx,
             label.trim_start(),
@@ -374,3 +391,5 @@ const EXPLAIN_MODIFIED: &str = "When the file's contents were last changed.";
 const EXPLAIN_ACCESSED: &str =
     "When the file was last read. Many systems no longer update this by default.";
 const EXPLAIN_CREATED: &str = "When the file was created, if the filesystem tracks it.";
+const EXPLAIN_OWNER: &str = "The user that owns this file.";
+const EXPLAIN_GROUP: &str = "The group that owns this file.";

@@ -25,7 +25,7 @@ pub fn parse(argv: impl Iterator<Item = String>) -> Result<Config, NstatError> {
             "--no-color" => no_color = true,
             "--no-follow" | "-l" => no_follow = true,
             flag if flag.starts_with('-') && flag.len() > 1 => {
-                return Err(NstatError::UnknownFlag(flag.to_string()))
+                return Err(NstatError::UnknownFlag(flag.to_string()));
             }
             value => paths.push(PathBuf::from(value)),
         }
