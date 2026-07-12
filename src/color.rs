@@ -1,3 +1,4 @@
+use std::fmt;
 use std::io::IsTerminal;
 
 /// Whether to emit ANSI color codes at all. Decided once, at startup,
@@ -5,6 +6,22 @@ use std::io::IsTerminal;
 /// whether stdout is actually a terminal.
 pub struct Palette {
     enabled: bool,
+}
+
+pub struct Painted<'a> {
+    text: &'a str,
+    code: &'a str,
+    enabled: bool,
+}
+
+impl<'a> fmt::Display for Painted<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.enabled {
+            write!(f, "\x1b[{}m{}\x1b[0m", self.code, self.text)
+        } else {
+            f.write_str(self.text)
+        }
+    }
 }
 
 impl Palette {
@@ -15,35 +32,30 @@ impl Palette {
         Palette { enabled }
     }
 
-    pub fn label(&self, s: &str) -> String {
-        self.wrap(s, "0") // normal
+    pub fn label<'a>(&self, s: &'a str) -> Painted<'a> {
+        self.wrap(s, "0")
+    }
+    pub fn value<'a>(&self, s: &'a str) -> Painted<'a> {
+        self.wrap(s, "1")
+    }
+    pub fn identity<'a>(&self, s: &'a str) -> Painted<'a> {
+        self.wrap(s, "3")
+    }
+    pub fn stat<'a>(&self, s: &'a str) -> Painted<'a> {
+        self.wrap(s, "32")
+    }
+    pub fn perm<'a>(&self, s: &'a str) -> Painted<'a> {
+        self.wrap(s, "32")
+    }
+    pub fn time<'a>(&self, s: &'a str) -> Painted<'a> {
+        self.wrap(s, "32")
     }
 
-    pub fn value(&self, s: &str) -> String {
-        self.wrap(s, "1") // bold
-    }
-
-    pub fn identity(&self, s: &str) -> String {
-        self.wrap(s, "3") // italic
-    }
-
-    pub fn stat(&self, s: &str) -> String {
-        self.wrap(s, "32") // green
-    }
-
-    pub fn perm(&self, s: &str) -> String {
-        self.wrap(s, "32") // green
-    }
-
-    pub fn time(&self, s: &str) -> String {
-        self.wrap(s, "32") // green
-    }
-
-    fn wrap(&self, s: &str, code: &str) -> String {
-        if self.enabled {
-            format!("\x1b[{code}m{s}\x1b[0m")
-        } else {
-            s.to_string()
+    fn wrap<'a>(&self, text: &'a str, code: &'a str) -> Painted<'a> {
+        Painted {
+            text,
+            code,
+            enabled: self.enabled,
         }
     }
 }

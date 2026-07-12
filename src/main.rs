@@ -8,7 +8,8 @@ use std::process::ExitCode;
 
 fn main() -> ExitCode {
     match run() {
-        Ok(()) => ExitCode::SUCCESS,
+        Ok(true) => ExitCode::SUCCESS,
+        Ok(false) => ExitCode::FAILURE,
         Err(e) => {
             eprintln!("nstat: {e}");
             ExitCode::FAILURE
@@ -16,33 +17,34 @@ fn main() -> ExitCode {
     }
 }
 
-fn run() -> Result<(), error::NstatError> {
+/// Returns Ok(true) if all paths were successfully processed,
+/// or Ok(false) if one or more paths failed to sta.
+fn run() -> Result<bool, error::NstatError> {
     let config = args::parse(std::env::args().skip(1))?;
     let pal = color::Palette::decide(config.no_color);
 
     if config.help {
-       print_help();
-       return Ok(());
+        args::print_help();
+        return Ok(true);
     }
-    let info = info::gather(&config.path, config.no_follow)?;
-    print!("{}", output::render(&info, config.explain, &pal));
-    Ok(())
-}
 
-fn print_help() {
-    println!(
-        r#"nstat - lightweight system stats & file tracking engine
+    let mut all_success = true;
+    let path_count = config.paths.len();
 
-USAGE:
-    nstat [OPTIONS] [PATH]
+    for (i, path) in config.paths.iter().enumerate() {
+        match info::gather(path, config.no_follow) {
+            Ok(info) => {
+                print!("{}", output::render(&info, config.explain, &pal));
+                if i < path_count - 1 {
+                    println!();
+                }
+            }
+            Err(e) => {
+                eprintln!("nstat: {e}");
+                all_success = false;
+            }
+        }
+    }
 
-OPTIONS:
-    -h, --help       Print this help message
-    --explain        Provide detailed metric breakdowns
-    --no-color       Disable ANSI terminal colors
-    -l, --no-follow  Do not follow symlinks
-
-ARGS:
-    <PATH>           Directory or file to analyze [default: .]"#
-    );
+    Ok(all_success)
 }

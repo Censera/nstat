@@ -35,16 +35,13 @@ pub struct Info {
 /// Stats a path and classifies it
 pub fn gather(path: &Path, no_follow: bool) -> Result<Info, NstatError> {
     let link_meta = fs::symlink_metadata(path).map_err(|e| to_nstat_error(path, e))?;
-
     let is_symlink = link_meta.file_type().is_symlink();
-    let meta = if is_symlink && !no_follow {
-        fs::metadata(path).unwrap_or(link_meta.clone())
-    } else {
-        link_meta.clone()
-    };
-
     let kind = classify(path, &link_meta)?;
-
+    let meta = if is_symlink && !no_follow {
+        fs::metadata(path).map_err(|e| to_nstat_error(path, e))?
+    } else {
+        link_meta
+    };
     let name = path
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
@@ -114,9 +111,15 @@ fn detect_subtype(path: &Path) -> Option<&'static str> {
 }
 
 fn detect_by_magic(path: &Path) -> Option<&'static str> {
-    let mut f = fs::File::open(path).ok()?;
+    let mut f = match fs::File::open(path) {
+        Ok(file) => file,
+        Err(_) => return None, // Deliberate fallback to extension checking on read failure
+    };
     let mut buf = [0u8; 265];
-    let n = f.read(&mut buf).ok()?;
+    let n = match f.read(&mut buf) {
+        Ok(bytes) => bytes,
+        Err(_) => return None, // Deliberate fallback to extension checking on read failure.
+    };
     let b = &buf[..n];
 
     if b.starts_with(b"Signature: 8a477f597d28d172789f06886806bc55") {
@@ -220,7 +223,7 @@ fn detect_by_extension(path: &Path) -> Option<&'static str> {
     match name {
         "Cargo.toml" | "Cargo.lock" | "pyproject.toml" => return Some("TOML Configuration"),
         "package.json" | "package-lock.json" | "tsconfig.json" | "composer.json" => {
-            return Some("JSON Document")
+            return Some("JSON Document");
         }
         "Dockerfile" => return Some("Dockerfile"),
         "Makefile" | "makefile" | "GNUmakefile" => return Some("Makefile"),

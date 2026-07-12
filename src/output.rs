@@ -1,25 +1,36 @@
+use std::fmt::Write as _;
 use std::time::SystemTime;
 
-use crate::color::Palette;
+use crate::color::{Painted, Palette};
 use crate::info::{Info, Kind};
 
-pub fn render(info: &Info, explain: bool, pal: &Palette) -> String {
-    let mut out = String::new();
+struct RenderCtx<'a> {
+    out: &'a mut String,
+    pal: &'a Palette,
+    explain: bool,
+}
 
-    out.push_str(&format!("{}\n", pal.value(&info.name)));
+pub fn render(info: &Info, explain: bool, pal: &Palette) -> String {
+    // Preallocate a reasonable chunk
+    let mut out = String::with_capacity(1024);
+
+    let _ = writeln!(out, "{}", pal.value(&info.name));
     render_type_lines(info, &mut out, pal);
     out.push('\n');
 
-    match info.kind {
-        Kind::Regular => render_regular(info, &mut out, pal, explain),
-        Kind::Directory => {}
-        Kind::Symlink(_) => {}
-        Kind::Fifo | Kind::Socket | Kind::BlockDevice | Kind::CharDevice => {}
+    let mut ctx = RenderCtx {
+        out: &mut out,
+        pal,
+        explain,
+    };
+
+    if let Kind::Regular = info.kind {
+        render_regular(info, &mut ctx, pal)
     }
 
-    render_permissions(info, &mut out, pal, explain);
-    out.push('\n');
-    render_times(info, &mut out, pal, explain);
+    render_permissions(info, &mut ctx, pal);
+    ctx.out.push('\n');
+    render_times(info, &mut ctx, pal);
 
     out
 }
@@ -38,9 +49,9 @@ fn render_type_lines(info: &Info, out: &mut String, pal: &Palette) {
         Kind::CharDevice => ("Character Device", None),
     };
 
-    out.push_str(&format!("  {}\n", pal.identity(primary)));
+    let _ = writeln!(out, "  {}", pal.identity(primary));
     if let Some(s) = secondary {
-        out.push_str(&format!("  {}\n", pal.identity(&s)));
+        let _ = writeln!(out, "  {}", pal.identity(&s));
     }
 }
 
@@ -53,140 +64,120 @@ const REGULAR_LABELS: [&str; 6] = [
     "Inode",
 ];
 
-fn render_regular(info: &Info, out: &mut String, pal: &Palette, explain: bool) {
+fn render_regular(info: &Info, ctx: &mut RenderCtx, _pal: &Palette) {
     let width = label_width(&REGULAR_LABELS);
     row(
-        out,
-        pal,
+        ctx,
         "Size",
         &human_bytes(info.size),
-        explain,
         EXPLAIN_SIZE,
         width,
         Palette::stat,
     );
     row(
-        out,
-        pal,
+        ctx,
         "Disk Blocks",
         &format!("{} ({} B each)", info.disk_blocks, 512),
-        explain,
         EXPLAIN_DISK_BLOCKS,
         width,
         Palette::stat,
     );
     if info.io_block > 0 {
         row(
-            out,
-            pal,
+            ctx,
             "IO Block",
             &human_bytes(info.io_block),
-            explain,
             EXPLAIN_IO_BLOCK,
             width,
             Palette::stat,
         );
     }
     row(
-        out,
-        pal,
+        ctx,
         "Hard Links",
         &info.hard_links.to_string(),
-        explain,
         EXPLAIN_HARD_LINKS,
         width,
         Palette::stat,
     );
     row(
-        out,
-        pal,
+        ctx,
         "Device",
         &format_device(info.device),
-        explain,
         EXPLAIN_DEVICE,
         width,
         Palette::stat,
     );
     row(
-        out,
-        pal,
+        ctx,
         "Inode",
         &info.inode.to_string(),
-        explain,
         EXPLAIN_INODE,
         width,
         Palette::stat,
     );
-    out.push('\n');
+    ctx.out.push('\n');
 }
 
 fn label_width(labels: &[&str]) -> usize {
     labels.iter().map(|l| l.chars().count()).max().unwrap_or(0)
 }
 
-fn render_permissions(info: &Info, out: &mut String, pal: &Palette, explain: bool) {
+fn render_permissions(info: &Info, ctx: &mut RenderCtx, pal: &Palette) {
     let perm_bits = info.mode & 0o777;
+    let width = "Permissions".chars().count();
     row(
-        out,
-        pal,
+        ctx,
         "Permissions",
         &format!("{} {:04o}", rwx_string(perm_bits), perm_bits),
-        explain,
         EXPLAIN_PERMISSIONS,
-        "Permissions".chars().count(),
+        width,
         Palette::perm,
     );
     for (label, shift) in [("Owner", 6), ("Group", 3), ("Other", 0)] {
         let bits = (perm_bits >> shift) & 0o7;
-        out.push_str(&format!(
-            "        {}  {}\n",
+        let _ = writeln!(
+            ctx.out,
+            "        {}  {}",
             pal.label(label),
-            pal.perm(&rwx_words(bits))
-        ));
+            pal.perm(rwx_words(bits)) // Removed the & because rwx_words is now &'static str
+        );
     }
 }
 
 const TIME_LABELS: [&str; 3] = ["Modified", "Accessed", "Created"];
 
-fn render_times(info: &Info, out: &mut String, pal: &Palette, explain: bool) {
+fn render_times(info: &Info, ctx: &mut RenderCtx, _pal: &Palette) {
     let width = label_width(&TIME_LABELS);
     row(
-        out,
-        pal,
+        ctx,
         "Modified",
         &natural_time(info.modified),
-        explain,
         EXPLAIN_MODIFIED,
         width,
         Palette::time,
     );
     row(
-        out,
-        pal,
+        ctx,
         "Accessed",
         &natural_time(info.accessed),
-        explain,
         EXPLAIN_ACCESSED,
         width,
         Palette::time,
     );
     match info.created {
         Some(t) => row(
-            out,
-            pal,
+            ctx,
             " Created",
             &natural_time(t),
-            explain,
             EXPLAIN_CREATED,
             width,
             Palette::time,
         ),
         None => row(
-            out,
-            pal,
+            ctx,
             "Created",
             "Not available on this filesystem",
-            explain,
             EXPLAIN_CREATED,
             width,
             Palette::time,
@@ -194,29 +185,27 @@ fn render_times(info: &Info, out: &mut String, pal: &Palette, explain: bool) {
     }
 }
 
-/// Renders one "Label   value" line, padded to `width` column
+/// Renders one padded metric row.
 fn row(
-    out: &mut String,
-    pal: &Palette,
+    ctx: &mut RenderCtx,
     label: &str,
     value: &str,
-    explain: bool,
     explanation: &str,
     width: usize,
-    color: fn(&Palette, &str) -> String,
+    color: for<'p, 'v> fn(&'p Palette, &'v str) -> Painted<'v>,
 ) {
-    let pad = " ".repeat(width.saturating_sub(label.chars().count()));
-    out.push_str(&format!(
-        "  {}{}  {}\n",
-        pal.label(label),
-        pad,
-        color(pal, value)
-    ));
-    if explain {
-        out.push_str(&format!("      {}\n", explanation));
+    let pad_len = width.saturating_sub(label.chars().count());
+    let _ = write!(ctx.out, "  {}", ctx.pal.label(label));
+    for _ in 0..pad_len {
+        let _ = write!(ctx.out, " ");
+    }
+    let _ = writeln!(ctx.out, "  {}", color(ctx.pal, value));
+    if ctx.explain {
+        let _ = writeln!(ctx.out, "      {}", explanation);
     }
 }
 
+// funny name
 fn human_bytes(n: u64) -> String {
     const UNITS: [&str; 5] = ["B", "KiB", "MiB", "GiB", "TiB"];
     let mut size = n as f64;
@@ -233,31 +222,35 @@ fn human_bytes(n: u64) -> String {
 }
 
 fn rwx_string(bits: u32) -> String {
-    let mut s = String::with_capacity(9);
-    for shift in [6, 3, 0] {
+    let mut buf = [b'-'; 9];
+    for (i, shift) in [6, 3, 0].into_iter().enumerate() {
         let b = (bits >> shift) & 0o7;
-        s.push(if b & 4 != 0 { 'r' } else { '-' });
-        s.push(if b & 2 != 0 { 'w' } else { '-' });
-        s.push(if b & 1 != 0 { 'x' } else { '-' });
+        if b & 4 != 0 {
+            buf[i * 3] = b'r';
+        }
+        if b & 2 != 0 {
+            buf[i * 3 + 1] = b'w';
+        }
+        if b & 1 != 0 {
+            buf[i * 3 + 2] = b'x';
+        }
     }
-    s
+
+    // Safe because we only ever push valid ASCII chars: r, w, x, -
+    unsafe { String::from_utf8_unchecked(buf.to_vec()) }
 }
 
-fn rwx_words(bits: u32) -> String {
-    let mut parts = Vec::new();
-    if bits & 4 != 0 {
-        parts.push("Read");
-    }
-    if bits & 2 != 0 {
-        parts.push("Write");
-    }
-    if bits & 1 != 0 {
-        parts.push("Execute");
-    }
-    if parts.is_empty() {
-        "None".to_string()
-    } else {
-        parts.join(" / ")
+fn rwx_words(bits: u32) -> &'static str {
+    match bits & 0o7 {
+        0 => "None",
+        1 => "Execute",
+        2 => "Write",
+        3 => "Write / Execute",
+        4 => "Read",
+        5 => "Read / Execute",
+        6 => "Read / Write",
+        7 => "Read / Write / Execute",
+        _ => unreachable!(),
     }
 }
 
@@ -275,19 +268,19 @@ fn natural_time(t: SystemTime) -> String {
     };
 
     let phrase = if secs < 0 {
-        "in the future".to_string()
+        "In the future".to_string()
     } else if secs < 60 {
-        "just now".to_string()
+        "Just now".to_string()
     } else if secs < 3600 {
-        plural(secs / 60, "minute")
+        plural(secs / 60, "Minute")
     } else if secs < 86400 {
-        plural(secs / 3600, "hour")
+        plural(secs / 3600, "Hour")
     } else if secs < 86400 * 30 {
-        plural(secs / 86400, "day")
+        plural(secs / 86400, "Day")
     } else if secs < 86400 * 365 {
-        plural(secs / (86400 * 30), "month")
+        plural(secs / (86400 * 30), "Month")
     } else {
-        plural(secs / (86400 * 365), "year")
+        plural(secs / (86400 * 365), "Year")
     };
 
     format!("{} | {phrase}", absolute_time(t))
@@ -302,40 +295,60 @@ fn plural(n: i64, unit: &str) -> String {
 }
 
 fn get_local_offset(unix_secs: i64) -> i64 {
+    /*
+     * localtime_r is thread-safe and does not mutate global state
+     * The tm_struct is zero-initialized and lives on the local stack
+     * We own the pointer passed to the C function, ensuring no aliasing or lifetime issues
+     */
     unsafe {
         let time_val = unix_secs as libc::time_t;
         let mut tm_struct = std::mem::zeroed::<libc::tm>();
-        
+
         if libc::localtime_r(&time_val, &mut tm_struct).is_null() {
             return 0; // Fallback to 0 if the system call fails
         }
-        
+
         tm_struct.tm_gmtoff as i64
     }
 }
-
 
 fn absolute_time(t: SystemTime) -> String {
     let secs = t
         .duration_since(SystemTime::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0);
-    
-    let now_secs = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(secs);
 
-    let offset = get_local_offset(now_secs);
+    let offset = get_local_offset(secs);
     let local_secs = secs + offset;
 
-    let tz_label = match offset {
-        0 => "UTC",
-        3600 => "BST",
-        _ => "local",
+    // The tz_label assignment in output.rs makes a hardcoded
+    // assumption that any 3600 second offset is British Summer
+    // Time (BST). Since 3600 seconds (UTC+1) is also shared by
+    // Central European Time (CET) and Western European Summer
+    // Time (WEST), this is factually incorrect
+    //
+    // let tz_label = match offset {
+    //     0 => "UTC",
+    //     3600 => "BST",
+    //     _ => "local",
+    // };
+
+    let tz_label = if offset == 0 {
+        "UTC".to_string()
+    } else {
+        let sign = if offset >= 0 { '+' } else { '-' };
+        let abs_offset = offset.abs();
+        let hours = abs_offset / 3600;
+        let mins = (abs_offset % 3600) / 60;
+
+        if mins == 0 {
+            format!("UTC{}{}", sign, hours)
+        } else {
+            format!("UTC{}{}:{:02}", sign, hours, mins)
+        }
     };
 
-    format!("{} {tz_label}", civil_from_unix(local_secs).replace(" UTC", ""))
+    format!("{} {}", civil_from_unix(local_secs), tz_label)
 }
 
 fn civil_from_unix(unix_secs: i64) -> String {
