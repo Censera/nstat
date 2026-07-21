@@ -1,5 +1,3 @@
-# nstat
-
 [![License](https://img.shields.io/github/license/Censera/nstat.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-edition%202024-orange.svg)](https://doc.rust-lang.org/edition-guide/rust-2024/index.html)
 
