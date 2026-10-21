@@ -1,5 +1,5 @@
 // getpwuid, getgrgid, localtime_r, and libc::tm are all POSIX only.
-// None of this compiles on Windows. If nstat needs to stay cross-platform,
+// None of this compiles on Windows. If `stats` needs to stay cross-platform,
 // this has to go behind a cfg(unix) gate with a fallback,
 // not land as the only implementation.
 
@@ -9,7 +9,7 @@ use std::os::unix::fs::{FileTypeExt, MetadataExt};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use crate::error::NstatError;
+use crate::error::StatsError;
 
 pub enum Kind {
     Regular,
@@ -40,12 +40,12 @@ pub struct Info {
 }
 
 /// Stats a path and classifies it
-pub fn gather(path: &Path, no_follow: bool) -> Result<Info, NstatError> {
-    let link_meta = fs::symlink_metadata(path).map_err(|e| to_nstat_error(path, e))?;
+pub fn gather(path: &Path, no_follow: bool) -> Result<Info, StatsError> {
+    let link_meta = fs::symlink_metadata(path).map_err(|e| to_stats_error(path, e))?;
     let is_symlink = link_meta.file_type().is_symlink();
     let kind = classify(path, &link_meta)?;
     let meta = if is_symlink && !no_follow {
-        fs::metadata(path).map_err(|e| to_nstat_error(path, e))?
+        fs::metadata(path).map_err(|e| to_stats_error(path, e))?
     } else {
         link_meta
     };
@@ -103,7 +103,7 @@ pub fn gather(path: &Path, no_follow: bool) -> Result<Info, NstatError> {
     })
 }
 
-fn classify(path: &Path, meta: &fs::Metadata) -> Result<Kind, NstatError> {
+fn classify(path: &Path, meta: &fs::Metadata) -> Result<Kind, StatsError> {
     let ft = meta.file_type();
     if ft.is_symlink() {
         let target = fs::read_link(path).map_err(|e| to_readlink_error(path, e))?;
@@ -127,19 +127,19 @@ fn classify(path: &Path, meta: &fs::Metadata) -> Result<Kind, NstatError> {
     Ok(Kind::Regular)
 }
 
-fn to_nstat_error(path: &Path, e: std::io::Error) -> NstatError {
+fn to_stats_error(path: &Path, e: std::io::Error) -> StatsError {
     match e.kind() {
-        std::io::ErrorKind::NotFound => NstatError::PathNotFound(path.to_path_buf()),
-        std::io::ErrorKind::PermissionDenied => NstatError::PermissionDenied(path.to_path_buf()),
-        _ => NstatError::Stat(path.to_path_buf(), e),
+        std::io::ErrorKind::NotFound => StatsError::PathNotFound(path.to_path_buf()),
+        std::io::ErrorKind::PermissionDenied => StatsError::PermissionDenied(path.to_path_buf()),
+        _ => StatsError::Stat(path.to_path_buf(), e),
     }
 }
 
-fn to_readlink_error(path: &Path, e: std::io::Error) -> NstatError {
+fn to_readlink_error(path: &Path, e: std::io::Error) -> StatsError {
     match e.kind() {
-        std::io::ErrorKind::NotFound => NstatError::PathNotFound(path.to_path_buf()),
-        std::io::ErrorKind::PermissionDenied => NstatError::PermissionDenied(path.to_path_buf()),
-        _ => NstatError::ReadLink(path.to_path_buf(), e),
+        std::io::ErrorKind::NotFound => StatsError::PathNotFound(path.to_path_buf()),
+        std::io::ErrorKind::PermissionDenied => StatsError::PermissionDenied(path.to_path_buf()),
+        _ => StatsError::ReadLink(path.to_path_buf(), e),
     }
 }
 

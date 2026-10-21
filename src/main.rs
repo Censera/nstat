@@ -16,7 +16,7 @@ fn main() -> ExitCode {
         Ok(true) => ExitCode::SUCCESS,
         Ok(false) => ExitCode::FAILURE,
         Err(e) => {
-            eprintln!("nstat: {e}");
+            eprintln!("stats: {e}");
             ExitCode::FAILURE
         }
     }
@@ -24,7 +24,7 @@ fn main() -> ExitCode {
 
 /// Returns Ok(true) if all paths were successfully processed,
 /// or Ok(false) if one or more paths failed to stat.
-fn run() -> Result<bool, error::NstatError> {
+fn run() -> Result<bool, error::StatsError> {
     let config = args::parse(std::env::args().skip(1))?;
     let pal = color::Palette::decide(config.no_color);
 
@@ -45,7 +45,7 @@ fn run() -> Result<bool, error::NstatError> {
                 }
             }
             Err(e) => {
-                eprintln!("nstat: {e}");
+                eprintln!("stats: {e}");
                 all_success = false;
             }
         }

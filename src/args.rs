@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::error::NstatError;
+use crate::error::StatsError;
 
 /// Resolved run configuration.
 pub struct Config {
@@ -11,7 +11,7 @@ pub struct Config {
     pub help: bool,
 }
 
-pub fn parse(argv: impl Iterator<Item = String>) -> Result<Config, NstatError> {
+pub fn parse(argv: impl Iterator<Item = String>) -> Result<Config, StatsError> {
     let mut paths: Vec<PathBuf> = Vec::new();
     let mut explain = false;
     let mut no_color = false;
@@ -25,7 +25,7 @@ pub fn parse(argv: impl Iterator<Item = String>) -> Result<Config, NstatError> {
             "--no-color" => no_color = true,
             "--no-follow" | "-l" => no_follow = true,
             flag if flag.starts_with('-') && flag.len() > 1 => {
-                return Err(NstatError::UnknownFlag(flag.to_string()));
+                return Err(StatsError::UnknownFlag(flag.to_string()));
             }
             value => paths.push(PathBuf::from(value)),
         }
@@ -46,11 +46,11 @@ pub fn parse(argv: impl Iterator<Item = String>) -> Result<Config, NstatError> {
 
 pub fn print_help() {
     println!(
-        r#"nstat (neostat)
+        r#"stats
   lightweight system stats & file tracking engine
 
 USAGE:
-  nstat [OPTIONS] [PATH]...
+  stats [OPTIONS] [PATH]...
 
 OPTIONS:
   -h, --help       Print this help message
